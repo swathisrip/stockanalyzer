@@ -9,17 +9,18 @@ import logging
 import time
 import requests
 import os
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 from database import CacheManager
-
+import streamlit as st
 # Load environment variables
-load_dotenv()
+# load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Polygon.io API configuration
-POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', 'NJFsmgVJrgZxyLE0Rk0RUQvmXq66_IU_')
+# POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', 'NJFsmgVJrgZxyLE0Rk0RUQvmXq66_IU_')
+POLYGON_API_KEY = st.secrets["POLYGON_API_KEY"]
 POLYGON_BASE_URL = "https://api.polygon.io/v2"
 
 
