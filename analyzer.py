@@ -311,49 +311,90 @@ class StockAnalyzer:
         return pd.DataFrame()
 
     def get_macd_rsi_signals(self, count: int = 2) -> pd.DataFrame:
-        """Get recent MACD + RSI signals"""
-        if self.signals is None:
+        """Get MACD + RSI signals based on latest state"""
+        if self.data is None or self.data.empty or self.signals is None:
             return pd.DataFrame()
         
+        data = self.data.copy()
         signals = self.signals.copy()
-        buy_sell = signals[(signals['Buy_Signal'] == 1) | (signals['Sell_Signal'] == 1)]
         result = []
         
-        for _, row in buy_sell.iterrows():
-            signal_type = 'BUY 🔼' if row['Buy_Signal'] == 1 else 'SELL 🔽'
-            result.append({
-                'Date': row['Date'],
-                'Close': f"${row['Close']:.2f}",
-                'Signal': signal_type,
-                'Type': 'MACD + RSI'
-            })
+        # Check latest state of each indicator
+        latest_date = data.index[-1]
+        latest_row = data.iloc[-1]
+        
+        # Get indicator states
+        macd_val = latest_row['MACD']
+        signal_val = latest_row['MACD_Signal']
+        rsi_val = latest_row['RSI']
+        
+        # Check if both indicators are bullish/bearish
+        macd_bullish = pd.notna(macd_val) and pd.notna(signal_val) and macd_val > signal_val
+        rsi_bullish = pd.notna(rsi_val) and rsi_val > 50
+        
+        # Determine signal
+        if macd_bullish and rsi_bullish:
+            signal_type = 'BUY 🔼'
+            agreement = 'Both bullish'
+        elif not macd_bullish and not rsi_bullish:
+            signal_type = 'SELL 🔽'
+            agreement = 'Both bearish'
+        else:
+            signal_type = 'MIXED ⚖️'
+            agreement = 'Indicators disagree'
+        
+        result.append({
+            'Date': latest_date.strftime('%Y-%m-%d %H:%M:%S') if hasattr(latest_date, 'strftime') else str(latest_date),
+            'Close': f"${latest_row['Close']:.2f}",
+            'Signal': signal_type,
+            'Type': agreement
+        })
         
         if result:
-            result_df = pd.DataFrame(result).sort_values('Date', ascending=False).head(count)
-            return result_df.reset_index(drop=True)
+            return pd.DataFrame(result).reset_index(drop=True)
         return pd.DataFrame()
 
     def get_hma_signals(self, count: int = 2) -> pd.DataFrame:
-        """Get recent HMA signals"""
-        if self.signals is None:
+        """Get HMA signals based on latest state"""
+        if self.data is None or self.data.empty or self.signals is None:
             return pd.DataFrame()
         
+        data = self.data.copy()
         signals = self.signals.copy()
-        hma_signals = signals[(signals['HMA_Buy_Signal'] == 1) | (signals['HMA_Sell_Signal'] == 1)]
         result = []
         
-        for _, row in hma_signals.iterrows():
-            signal_type = 'BUY 🔼' if row['HMA_Buy_Signal'] == 1 else 'SELL 🔽'
-            result.append({
-                'Date': row['Date'],
-                'Close': f"${row['Close']:.2f}",
-                'Signal': signal_type,
-                'Type': 'HMA'
-            })
+        # Check latest state of HMA
+        latest_date = data.index[-1]
+        latest_row = data.iloc[-1]
+        latest_signal_row = signals.iloc[-1]
+        
+        # Get HMA state
+        latest_hma = latest_row['HMA'] if 'HMA' in latest_row.index else None
+        latest_price = latest_row['Close']
+        hma_buy_signal = latest_signal_row['HMA_Buy_Signal'] == 1 if pd.notna(latest_signal_row.get('HMA_Buy_Signal')) else False
+        hma_sell_signal = latest_signal_row['HMA_Sell_Signal'] == 1 if pd.notna(latest_signal_row.get('HMA_Sell_Signal')) else False
+        
+        # Determine signal based on HMA position relative to price
+        if pd.notna(latest_hma) and pd.notna(latest_price):
+            if latest_hma < latest_price:
+                signal_type = 'BUY 🔼'
+                agreement = 'HMA below price'
+            else:
+                signal_type = 'SELL 🔽'
+                agreement = 'HMA above price'
+        else:
+            signal_type = 'N/A'
+            agreement = 'Insufficient data'
+        
+        result.append({
+            'Date': latest_date.strftime('%Y-%m-%d %H:%M:%S') if hasattr(latest_date, 'strftime') else str(latest_date),
+            'Close': f"${latest_price:.2f}",
+            'Signal': signal_type,
+            'Type': agreement
+        })
         
         if result:
-            result_df = pd.DataFrame(result).sort_values('Date', ascending=False).head(count)
-            return result_df.reset_index(drop=True)
+            return pd.DataFrame(result).reset_index(drop=True)
         return pd.DataFrame()
 
     def get_macd_hma_signals(self, count: int = 2) -> pd.DataFrame:
