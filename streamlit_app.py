@@ -249,6 +249,36 @@ with tab1:
                         if change is not None:
                             st.metric("Period Change", f"${change:.2f}", delta=f"{pct_change:.2f}%")
 
+                    # Display current indicator trends prominently
+                    st.markdown("---")
+                    
+                    col_trends = st.columns(3)
+                    
+                    # MACD Trend
+                    with col_trends[0]:
+                        macd_trend = analysis.get('MACD Trend (Current)', 'N/A')
+                        macd_color = '🟢' if macd_trend == 'BULLISH' else '🔴' if macd_trend == 'BEARISH' else '⚪'
+                        st.info(f"📊 MACD: {macd_color} **{macd_trend}**\n({analysis['MACD']:.4f} vs {analysis['MACD Signal']:.4f})")
+                    
+                    # RSI State
+                    with col_trends[1]:
+                        rsi_val = analysis.get('RSI', 'N/A')
+                        rsi_state = analysis.get('RSI State', 'N/A')
+                        if rsi_state == 'OVERBOUGHT':
+                            rsi_color = '🔴'
+                        elif rsi_state == 'OVERSOLD':
+                            rsi_color = '🔵'
+                        else:
+                            rsi_color = '🟡'
+                        st.info(f"📈 RSI: {rsi_color} **{rsi_state}**\n({rsi_val})")
+                    
+                    # HMA Trend
+                    with col_trends[2]:
+                        hma_trend = analysis.get('HMA Trend', 'N/A')
+                        hma_color = '🟢' if hma_trend == 'BULLISH' else '🔴' if hma_trend == 'BEARISH' else '⚪'
+                        hma_val = analysis.get('HMA', 'N/A')
+                        st.info(f"🔷 HMA: {hma_color} **{hma_trend}**\n({hma_val})")
+
                     # Fetch and display news
                     st.markdown("---")
                     try:
@@ -348,19 +378,95 @@ with tab1:
 
                     # Trading signals timeline
                     st.markdown("---")
-                    st.subheader("Trading Signals Timeline")
+                    st.subheader("Trading Signals")
                     recent_signals = analyzer.get_recent_signals(days=len(analyzer.data))
                     if len(recent_signals) > 0:
                         st.plotly_chart(visualizer.plot_signals_timeline(recent_signals), use_container_width=True)
-
-                        # Display signals table
-                        st.subheader("Recent Trading Signals")
-                        signals_display = recent_signals[['Date', 'Close', 'Signal', 'Type']].copy()
-                        signals_display['Date'] = signals_display['Date'].dt.strftime('%Y-%m-%d')
-                        signals_display['Close'] = signals_display['Close'].apply(lambda x: f"${x:.2f}")
-                        st.dataframe(signals_display, use_container_width=True, hide_index=True)
                     else:
                         st.info("No trading signals detected in this period")
+
+                    # Display MACD crossover history
+                    st.markdown("---")
+                    st.subheader("MACD Trend Crossover History (Last 5)")
+                    macd_crossovers = analyzer.get_macd_crossovers(count=5)
+                    if len(macd_crossovers) > 0:
+                        st.dataframe(macd_crossovers, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No MACD crossovers detected in this period")
+
+                    # Display three signal tables
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.subheader("Recent MACD + RSI Signals")
+                        macd_rsi_signals = analyzer.get_macd_rsi_signals(count=2)
+                        if len(macd_rsi_signals) > 0:
+                            st.dataframe(macd_rsi_signals, use_container_width=True, hide_index=True)
+                        else:
+                            st.info("No MACD + RSI signals detected")
+
+                    with col2:
+                        st.subheader("Recent HMA Signals")
+                        hma_signals = analyzer.get_hma_signals(count=2)
+                        if len(hma_signals) > 0:
+                            st.dataframe(hma_signals, use_container_width=True, hide_index=True)
+                        else:
+                            st.info("No HMA signals detected")
+
+                    col3, col4 = st.columns(2)
+
+                    with col3:
+                        st.subheader("Recent Combined Signals (MACD + RSI + HMA)")
+                        combined_signals = analyzer.get_combined_signals(count=2)
+                        if len(combined_signals) > 0:
+                            st.dataframe(combined_signals, use_container_width=True, hide_index=True)
+                        else:
+                            st.info("No combined signals detected")
+
+                    with col4:
+                        st.write("")  # Empty space for layout balance
+
+                    # MACD Debug Section
+                    with st.expander("🔍 MACD Debug - Verify MACD Trend Analysis"):
+                        st.write("Use this section to verify MACD calculations and verify why certain dates are treated as bullish or bearish")
+                        
+                        # Show data availability
+                        data_start = analyzer.data.index[0].date()
+                        data_end = analyzer.data.index[-1].date()
+                        st.info(f"📊 Data Available: {data_start} to {data_end}")
+                        
+                        debug_date = st.date_input("Select Date to Analyze", value=analyzer.data.index[-1].date())
+                        
+                        if debug_date:
+                            debug_analysis = analyzer.get_macd_analysis_at_date(debug_date.isoformat())
+                            
+                            # Check if actual date differs from selected date
+                            actual_date = debug_analysis['Date']
+                            if isinstance(actual_date, pd.Timestamp):
+                                actual_date = actual_date.date()
+                            
+                            if actual_date != debug_date:
+                                st.warning(f"⚠️ Selected date {debug_date} is not a trading day. Showing nearest date: **{actual_date}**")
+                            else:
+                                st.success(f"✓ Trading day data found: {actual_date}")
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.write("**MACD Values:**")
+                                st.write(f"MACD Line: {debug_analysis['MACD']}")
+                                st.write(f"Signal Line: {debug_analysis['Signal']}")
+                            
+                            with col2:
+                                st.write("**Analysis:**")
+                                st.write(f"Histogram: {debug_analysis['Histogram']}")
+                                st.write(f"Trend: **{debug_analysis['Trend']}**")
+                            
+                            st.write(f"**Detailed Comparison:**")
+                            st.write(debug_analysis['Comparison'])
+                            
+                            if debug_analysis['MACD > Signal'] is not None:
+                                comp_text = "MACD > Signal = BULLISH" if debug_analysis['MACD > Signal'] else "MACD < Signal = BEARISH"
+                                st.info(f"✓ {comp_text}")
 
                     # Export section
                     st.markdown("---")

@@ -359,6 +359,14 @@ class TechnicalIndicators:
         signals['Sell_Signal'] = 0
         signals['Bullish_Signal'] = 0
         signals['Bearish_Signal'] = 0
+        signals['HMA_Buy_Signal'] = 0
+        signals['HMA_Sell_Signal'] = 0
+        signals['MACD_HMA_Buy_Signal'] = 0
+        signals['MACD_HMA_Sell_Signal'] = 0
+        signals['MACD_HMA_Divergence_BearishBuy'] = 0  # MACD bearish but HMA buy
+        signals['MACD_HMA_Divergence_BullishSell'] = 0  # MACD bullish but HMA sell
+        signals['Combined_Buy_Signal'] = 0
+        signals['Combined_Sell_Signal'] = 0
 
         # Buy signal: RSI oversold AND MACD bullish crossover
         buy_condition = (
@@ -389,5 +397,39 @@ class TechnicalIndicators:
             (self.data['RSI'].fillna(50) >= RSI_OVERSOLD)  # Not oversold yet
         )
         signals.loc[bearish_condition, 'Bearish_Signal'] = 1
+
+        # HMA Signals: Local minima (buy) and local maxima (sell)
+        if 'HMA_Local_Min' in self.data.columns:
+            signals.loc[self.data['HMA_Local_Min'], 'HMA_Buy_Signal'] = 1
+        if 'HMA_Local_Max' in self.data.columns:
+            signals.loc[self.data['HMA_Local_Max'], 'HMA_Sell_Signal'] = 1
+
+        # MACD + HMA Signals: When both agree
+        macd_bullish = self.data['MACD'].fillna(0) > self.data['MACD_Signal'].fillna(0)
+        macd_bearish = self.data['MACD'].fillna(0) < self.data['MACD_Signal'].fillna(0)
+        hma_buy = self.data['HMA_Local_Min'].fillna(False)
+        hma_sell = self.data['HMA_Local_Max'].fillna(False)
+        
+        # Agreement signals (when both indicate same direction)
+        macd_hma_buy = macd_bullish & hma_buy
+        macd_hma_sell = macd_bearish & hma_sell
+        
+        signals.loc[macd_hma_buy, 'MACD_HMA_Buy_Signal'] = 1
+        signals.loc[macd_hma_sell, 'MACD_HMA_Sell_Signal'] = 1
+
+        # Divergence signals (when indicators disagree)
+        # Bearish MACD but bullish HMA = potential reversal signal (buy pressure emerging)
+        divergence_bearish_buy = macd_bearish & hma_buy
+        # Bullish MACD but bearish HMA = potential reversal signal (sell pressure emerging)
+        divergence_bullish_sell = macd_bullish & hma_sell
+        
+        signals.loc[divergence_bearish_buy, 'MACD_HMA_Divergence_BearishBuy'] = 1
+        signals.loc[divergence_bullish_sell, 'MACD_HMA_Divergence_BullishSell'] = 1
+
+        # Combined Signals: MACD + RSI + HMA agreement
+        combined_buy = buy_condition & self.data['HMA_Local_Min'].fillna(False)
+        combined_sell = sell_condition & self.data['HMA_Local_Max'].fillna(False)
+        signals.loc[combined_buy, 'Combined_Buy_Signal'] = 1
+        signals.loc[combined_sell, 'Combined_Sell_Signal'] = 1
 
         return signals
