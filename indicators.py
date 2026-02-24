@@ -9,7 +9,7 @@ import logging
 from config import (
     RSI_PERIOD, RSI_OVERBOUGHT, RSI_OVERSOLD,
     MACD_FAST, MACD_SLOW, MACD_SIGNAL,
-    EMA_PERIODS, SMA_PERIODS, BB_PERIOD, BB_STD_DEV
+    EMA_PERIODS, SMA_PERIODS, BB_PERIOD, BB_STD_DEV, HMA_PERIOD
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -137,6 +137,85 @@ class TechnicalIndicators:
 
         return upper_band, sma, lower_band
 
+    def calculate_hma(self, period: int = HMA_PERIOD) -> pd.Series:
+        """
+        Calculate Hull Moving Average (HMA) with concavity and turning points
+        HMA is a faster and smoother moving average that reduces lag
+
+        Args:
+            period: Period for HMA calculation (default 55)
+
+        Returns:
+            Series with HMA values
+        """
+        # HMA formula: WMA(2 * WMA(n/2) - WMA(n), sqrt(n))
+        n = period
+        n_half = n // 2
+        n_sqrt = int(np.sqrt(n))
+        lookback = 2
+
+        # Calculate weighted moving average using proper weights
+        def wma(series, period):
+            weights = np.arange(1, period + 1)
+            result = series.rolling(window=period).apply(
+                lambda x: np.sum(weights * x) / np.sum(weights),
+                raw=True
+            )
+            return result
+
+        # Calculate WMA for half period
+        wma_half = wma(self.data['Close'], n_half)
+
+        # Calculate WMA for full period
+        wma_full = wma(self.data['Close'], n)
+
+        # Calculate raw HMA: 2 * WMA(n/2) - WMA(n)
+        raw_hma = 2 * wma_half - wma_full
+
+        # Calculate final HMA: WMA of raw HMA with sqrt period
+        hma = wma(raw_hma, n_sqrt)
+
+        # Calculate concavity and turning points
+        # delta = HMA[1] - HMA[lookback + 1]
+        # delta_per_bar = delta / lookback
+        # next_bar = HMA[1] + delta_per_bar
+        # concavity = 1 if HMA > next_bar else -1
+        
+        delta = hma.shift(1) - hma.shift(lookback + 1)
+        delta_per_bar = delta / lookback
+        next_bar = hma.shift(1) + delta_per_bar
+        
+        # Concavity: 1 = up (bullish), -1 = down (bearish)
+        concavity = pd.Series(np.where(hma > next_bar, 1, -1), index=self.data.index)
+        
+        # Turning points: where concavity changes
+        concavity_shifted = concavity.shift(1)
+        turning_point = (concavity != concavity_shifted) & (concavity_shifted.notna())
+        
+        # Local maxima (potential sell): HMA[-1] < HMA and HMA > HMA[1]
+        hma_shifted_prev = hma.shift(-1)
+        hma_shifted_next = hma.shift(1)
+        local_max = (hma_shifted_prev < hma) & (hma > hma_shifted_next)
+        
+        # Local minima (potential buy): HMA[-1] > HMA and HMA < HMA[1]
+        local_min = (hma_shifted_prev > hma) & (hma < hma_shifted_next)
+        
+        # Store HMA data in dataframe
+        self.data['HMA'] = hma
+        self.data['HMA_Concavity'] = concavity
+        self.data['HMA_Turning_Point'] = turning_point
+        self.data['HMA_Local_Max'] = local_max
+        self.data['HMA_Local_Min'] = local_min
+        
+        # Debug logs
+        self.logger.info(f"HMA (first 5): {hma.head().tolist()}")
+        self.logger.info(f"HMA (last 5): {hma.tail().tolist()}")
+        self.logger.info(f"HMA Turning Points: {turning_point.sum()}")
+        self.logger.info(f"HMA Local Max (Sell): {local_max.sum()}")
+        self.logger.info(f"HMA Local Min (Buy): {local_min.sum()}")
+        
+        return hma
+
     def calculate_all_indicators(self) -> pd.DataFrame:
         """
         Calculate all technical indicators
@@ -151,6 +230,7 @@ class TechnicalIndicators:
         self.calculate_ema()
         self.calculate_sma()
         self.calculate_bollinger_bands()
+        self.calculate_hma()
 
         self.logger.info("Technical indicators calculated successfully")
         return self.data

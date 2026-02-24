@@ -224,7 +224,7 @@ class CacheManager:
 
             # Check if < 1 day old (86400 seconds)
             age_seconds = (current_time - cache_time).total_seconds()
-            is_valid = age_seconds < 86400  # 1 day in seconds
+            is_valid = age_seconds < 43200   # 1 day in seconds 86400
 
             if is_valid:
                 hours_old = age_seconds / 3600

@@ -22,6 +22,9 @@ EMA_PERIODS = [20, 50, 200]
 # SMA (Simple Moving Average)
 SMA_PERIODS = [20, 50, 200]
 
+# HMA (Hull Moving Average)
+HMA_PERIOD = 55
+
 # Bollinger Bands
 BB_PERIOD = 20
 BB_STD_DEV = 2
