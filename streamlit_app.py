@@ -225,6 +225,14 @@ with tab1:
 
                     # Get latest analysis
                     analysis = analyzer.get_latest_analysis()
+                    
+                    # Display date of analysis
+                    analysis_date = analysis['Date']
+                    if hasattr(analysis_date, 'strftime'):
+                        date_str = analysis_date.strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        date_str = str(analysis_date)
+                    st.caption(f"📅 Analysis Date: {date_str}")
 
                     # Metrics row
                     col1, col2, col3, col4 = st.columns(4)
