@@ -412,14 +412,117 @@ class WebVisualizer:
         """Plot price with Support/Resistance (Pivot Point) levels"""
         fig = go.Figure()
 
-        # Add price line
-        fig.add_trace(go.Scatter(
+        # Add candlestick chart for price with light colors
+        fig.add_trace(go.Candlestick(
             x=self.data.index,
-            y=self.data['Close'],
-            name='Close Price',
-            mode='lines',
-            line=dict(color='#1f77b4', width=2)
+            open=self.data['Open'],
+            high=self.data['High'],
+            low=self.data['Low'],
+            close=self.data['Close'],
+            name='Price Action',
+            increasing=dict(
+                line=dict(color='lightgreen'),
+                fillcolor='rgba(144, 238, 144, 0.7)'
+            ),
+            decreasing=dict(
+                line=dict(color='lightcoral'),
+                fillcolor='rgba(240, 128, 128, 0.7)'
+            )
         ))
+
+        # Add Hull Moving Average with concavity coloring (light colors)
+        if 'HMA' in self.data.columns and self.data['HMA'].notna().any():
+            hma_shifted = self.data['HMA'].shift(1)
+            
+            # Create color array based on concavity (light colors)
+            # Light Red: Concave Down, Decreasing (-1, <)
+            # Light Orange: Concave Down, Increasing (-1, >=)
+            # Light Green: Concave Up, Decreasing (1, <=)
+            # Light Blue: Concave Up, Increasing (1, >)
+            
+            colors = []
+            for i in range(len(self.data)):
+                if pd.isna(self.data['HMA_Concavity'].iloc[i]) or pd.isna(hma_shifted.iloc[i]):
+                    colors.append('lightgray')
+                elif self.data['HMA_Concavity'].iloc[i] == -1:
+                    # Bearish trend
+                    if self.data['HMA'].iloc[i] < hma_shifted.iloc[i]:
+                        colors.append('#ff9999')  # Light Red - Down decreasing
+                    else:
+                        colors.append('#ffcc99')  # Light Orange - Down increasing
+                else:  # concavity == 1
+                    # Bullish trend
+                    if self.data['HMA'].iloc[i] <= hma_shifted.iloc[i]:
+                        colors.append('#90ee90')  # Light Green - Up decreasing
+                    else:
+                        colors.append('#87ceeb')  # Light Blue - Up increasing
+            
+            # Plot HMA as scatter with connecting lines (light line)
+            fig.add_trace(go.Scatter(
+                x=self.data.index,
+                y=self.data['HMA'],
+                mode='lines+markers',
+                name='HMA 55',
+                line=dict(color='rgba(150,150,150,0.4)', width=2),
+                marker=dict(size=5, color=colors, 
+                           line=dict(width=0)),
+                hovertemplate='<b>HMA: %{y:.2f}</b><extra></extra>',
+                showlegend=True
+            ))
+            
+            # Add legend entries for color meanings (light colors)
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None],
+                mode='markers',
+                name='HMA Down↓ (Light Red)',
+                marker=dict(size=10, color='#ff9999'),
+                showlegend=True
+            ))
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None],
+                mode='markers',
+                name='HMA Down↗ (Light Orange)',
+                marker=dict(size=10, color='#ffcc99'),
+                showlegend=True
+            ))
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None],
+                mode='markers',
+                name='HMA Up↘ (Light Green)',
+                marker=dict(size=10, color='#90ee90'),
+                showlegend=True
+            ))
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None],
+                mode='markers',
+                name='HMA Up↑ (Light Blue)',
+                marker=dict(size=10, color='#1f77b4'),
+                showlegend=True
+            ))
+            
+            # Add BUY signals (local minima)
+            if 'HMA_Local_Min' in self.data.columns and self.data['HMA_Local_Min'].any():
+                fig.add_trace(go.Scatter(
+                    x=self.data.index[self.data['HMA_Local_Min']],
+                    y=self.data.loc[self.data['HMA_Local_Min'], 'HMA'],
+                    mode='markers',
+                    name='HMA BUY Signal',
+                    marker=dict(size=15, color='#008B8B', symbol='triangle-up', 
+                               line=dict(color='white', width=2)),
+                    showlegend=True
+                ))
+            
+            # Add SELL signals (local maxima)
+            if 'HMA_Local_Max' in self.data.columns and self.data['HMA_Local_Max'].any():
+                fig.add_trace(go.Scatter(
+                    x=self.data.index[self.data['HMA_Local_Max']],
+                    y=self.data.loc[self.data['HMA_Local_Max'], 'HMA'],
+                    mode='markers',
+                    name='HMA SELL Signal',
+                    marker=dict(size=15, color='#8B0000', symbol='triangle-down',
+                               line=dict(color='white', width=2)),
+                    showlegend=True
+                ))
 
         if not pivot_levels:
             return fig
